@@ -3,7 +3,7 @@ import pandas as pd
 import fitz
 import re
 
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ---------------------------------------------------
@@ -14,21 +14,6 @@ st.set_page_config(
     page_icon="📘",
     layout="wide"
 )
-
-# ---------------------------------------------------
-# LOAD MODEL
-# ---------------------------------------------------
-@st.cache_resource
-def load_model():
-
-    model = SentenceTransformer(
-        "all-MiniLM-L6-v2"
-    )
-
-    return model
-
-
-model = load_model()
 
 # ---------------------------------------------------
 # BLOOM TAXONOMY
@@ -100,7 +85,7 @@ def detect_blooms_level(question):
     return "Unknown"
 
 # ---------------------------------------------------
-# PDF EXTRACTION
+# PDF TEXT EXTRACTION
 # ---------------------------------------------------
 def extract_text_from_pdf(uploaded_file):
 
@@ -125,27 +110,29 @@ def validate_co_alignment(
     course_outcomes
 ):
 
-    question_embedding = model.encode(
-        [question]
+    documents = [question] + course_outcomes
+
+    vectorizer = TfidfVectorizer()
+
+    tfidf_matrix = vectorizer.fit_transform(
+        documents
     )
 
-    co_embeddings = model.encode(
-        course_outcomes
-    )
-
-    similarities = cosine_similarity(
-        question_embedding,
-        co_embeddings
+    similarity_scores = cosine_similarity(
+        tfidf_matrix[0:1],
+        tfidf_matrix[1:]
     )[0]
 
-    best_index = similarities.argmax()
+    best_index = similarity_scores.argmax()
 
     best_co = course_outcomes[
         best_index
     ]
 
     confidence = round(
-        similarities[best_index] * 100,
+        similarity_scores[
+            best_index
+        ] * 100,
         2
     )
 
@@ -158,6 +145,20 @@ st.title(
     "📘 Question Paper Quality Validator"
 )
 
+st.markdown("""
+
+### Features
+
+- Bloom's Taxonomy Detection
+- CO Alignment Validation
+- Lightweight AI Similarity Analysis
+- CSV Report Generation
+
+""")
+
+# ---------------------------------------------------
+# FILE UPLOADS
+# ---------------------------------------------------
 co_file = st.file_uploader(
     "Upload Course Outcomes PDF",
     type=["pdf"]
@@ -168,6 +169,9 @@ question_file = st.file_uploader(
     type=["pdf"]
 )
 
+# ---------------------------------------------------
+# VALIDATION
+# ---------------------------------------------------
 if st.button(
     "Validate Question Paper"
 ):
@@ -183,14 +187,21 @@ if st.button(
 
     else:
 
-        co_text = extract_text_from_pdf(
-            co_file
-        )
+        with st.spinner(
+            "Extracting PDF text..."
+        ):
 
-        q_text = extract_text_from_pdf(
-            question_file
-        )
+            co_text = extract_text_from_pdf(
+                co_file
+            )
 
+            q_text = extract_text_from_pdf(
+                question_file
+            )
+
+        # -------------------------------------------
+        # COURSE OUTCOMES
+        # -------------------------------------------
         course_outcomes = [
 
             line.strip()
@@ -202,6 +213,9 @@ if st.button(
             ) > 5
         ]
 
+        # -------------------------------------------
+        # QUESTIONS
+        # -------------------------------------------
         questions = [
 
             line.strip()
@@ -216,54 +230,98 @@ if st.button(
             )
         ]
 
+        if len(
+            course_outcomes
+        ) == 0:
+
+            st.error(
+                "No Course Outcomes detected"
+            )
+
+            st.stop()
+
+        if len(
+            questions
+        ) == 0:
+
+            st.error(
+                "No Questions detected"
+            )
+
+            st.stop()
+
+        # -------------------------------------------
+        # RESULTS
+        # -------------------------------------------
         results = []
 
-        for question in questions:
+        with st.spinner(
+            "Running Validation..."
+        ):
 
-            blooms_level = (
-                detect_blooms_level(
-                    question
-                )
-            )
+            for question in questions:
 
-            best_co, confidence = (
-                validate_co_alignment(
-                    question,
-                    course_outcomes
-                )
-            )
-
-            quality = "Good"
-
-            if confidence < 50:
-
-                quality = (
-                    "Needs Improvement"
+                blooms_level = (
+                    detect_blooms_level(
+                        question
+                    )
                 )
 
-            results.append({
+                best_co, confidence = (
+                    validate_co_alignment(
+                        question,
+                        course_outcomes
+                    )
+                )
 
-                "Question":
-                    question,
+                quality = "Good"
 
-                "Bloom Level":
-                    blooms_level,
+                if confidence < 40:
 
-                "Aligned CO":
-                    best_co,
+                    quality = (
+                        "Needs Improvement"
+                    )
 
-                "Confidence (%)":
-                    confidence,
+                results.append({
 
-                "Quality":
-                    quality
-            })
+                    "Question":
+                        question,
+
+                    "Bloom Level":
+                        blooms_level,
+
+                    "Aligned CO":
+                        best_co,
+
+                    "Confidence (%)":
+                        confidence,
+
+                    "Quality":
+                        quality
+                })
 
         result_df = pd.DataFrame(
             results
         )
 
+        st.success(
+            "Validation Completed"
+        )
+
         st.dataframe(
             result_df,
             use_container_width=True
+        )
+
+        csv = result_df.to_csv(
+            index=False
+        ).encode("utf-8")
+
+        st.download_button(
+            label="Download Report",
+            data=csv,
+            file_name=(
+                "validation_report.csv"
+            ),
+            mime="text/csv"
         )
