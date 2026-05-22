@@ -19,12 +19,12 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# LOAD AI MODEL
+# LOAD MODEL
 # ---------------------------------------------------
 @st.cache_resource
 def load_model():
 
-    model_name = "typeform/distilbert-base-uncased-mnli"
+    model_name = "facebook/bart-large-mnli"
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_name
@@ -47,7 +47,7 @@ def load_model():
 classifier = load_model()
 
 # ---------------------------------------------------
-# BLOOM TAXONOMY VERBS
+# BLOOM TAXONOMY KEYWORDS
 # ---------------------------------------------------
 blooms_keywords = {
 
@@ -116,7 +116,7 @@ def detect_blooms_level(question):
     return "Unknown"
 
 # ---------------------------------------------------
-# EXTRACT PDF TEXT
+# PDF TEXT EXTRACTION
 # ---------------------------------------------------
 def extract_text_from_pdf(uploaded_file):
 
@@ -209,7 +209,7 @@ question_file = st.file_uploader(
 )
 
 # ---------------------------------------------------
-# VALIDATION
+# VALIDATE
 # ---------------------------------------------------
 if st.button(
     "Validate Question Paper"
@@ -227,7 +227,7 @@ if st.button(
     else:
 
         # -------------------------------------------
-        # EXTRACT PDF TEXT
+        # EXTRACT TEXT
         # -------------------------------------------
         with st.spinner(
             "Extracting PDF content..."
@@ -273,7 +273,7 @@ if st.button(
         ]
 
         # -------------------------------------------
-        # VALIDATION CHECKS
+        # CHECKS
         # -------------------------------------------
         if len(
             course_outcomes
@@ -296,13 +296,10 @@ if st.button(
             st.stop()
 
         # -------------------------------------------
-        # RESULTS
+        # PROCESS
         # -------------------------------------------
         results = []
 
-        # -------------------------------------------
-        # AI VALIDATION
-        # -------------------------------------------
         with st.spinner(
             "Running AI Validation..."
         ):
