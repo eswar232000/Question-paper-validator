@@ -46,7 +46,7 @@ st.markdown("""
 ✅ Bloom Coverage Analysis  
 ✅ AI Similarity Scoring  
 ✅ Question Quality Evaluation  
-✅ Lightweight CPU Model  
+✅ Lightweight CPU-Based AI Model  
 
 """)
 
@@ -127,7 +127,7 @@ def detect_bloom_level(question):
     return "Unknown"
 
 # ---------------------------------------------------
-# PDF EXTRACTION
+# PDF TEXT EXTRACTION
 # ---------------------------------------------------
 def extract_text_from_pdf(uploaded_file):
 
@@ -243,7 +243,7 @@ def validate_co_alignment(
     return best_co, confidence
 
 # ---------------------------------------------------
-# QUALITY ANALYSIS
+# QUALITY EVALUATION
 # ---------------------------------------------------
 def evaluate_quality(
     bloom_level,
@@ -332,7 +332,7 @@ question_file = st.file_uploader(
 )
 
 # ---------------------------------------------------
-# VALIDATION
+# VALIDATION BUTTON
 # ---------------------------------------------------
 if st.button(
     "Validate Question Paper",
@@ -350,6 +350,9 @@ if st.button(
 
     else:
 
+        # -------------------------------------------
+        # EXTRACT PDF TEXT
+        # -------------------------------------------
         with st.spinner(
             "Reading PDFs..."
         ):
@@ -362,6 +365,9 @@ if st.button(
                 question_file
             )
 
+        # -------------------------------------------
+        # EXTRACT CONTENT
+        # -------------------------------------------
         course_outcomes = (
             extract_course_outcomes(
                 co_text
@@ -374,6 +380,9 @@ if st.button(
             )
         )
 
+        # -------------------------------------------
+        # VALIDATION CHECKS
+        # -------------------------------------------
         if len(course_outcomes) == 0:
 
             st.error(
@@ -390,6 +399,9 @@ if st.button(
 
             st.stop()
 
+        # -------------------------------------------
+        # VALIDATION
+        # -------------------------------------------
         results = []
 
         with st.spinner(
@@ -436,12 +448,15 @@ if st.button(
                         quality
                 })
 
+        # -------------------------------------------
+        # DATAFRAME
+        # -------------------------------------------
         result_df = pd.DataFrame(
             results
         )
 
         st.success(
-            "Validation Completed"
+            "Validation Completed Successfully"
         )
 
         st.dataframe(
@@ -449,6 +464,9 @@ if st.button(
             use_container_width=True
         )
 
+        # -------------------------------------------
+        # BLOOM COVERAGE
+        # -------------------------------------------
         coverage, missing = (
             bloom_coverage(
                 results
@@ -456,7 +474,7 @@ if st.button(
         )
 
         st.subheader(
-            "📊 Bloom Coverage Analysis"
+            "📊 Bloom Taxonomy Coverage"
         )
 
         st.metric(
@@ -470,6 +488,15 @@ if st.button(
                 f"Missing Bloom Levels: {', '.join(missing)}"
             )
 
+        else:
+
+            st.success(
+                "All Bloom Levels Covered"
+            )
+
+        # -------------------------------------------
+        # DOWNLOAD CSV
+        # -------------------------------------------
         csv = result_df.to_csv(
             index=False
         ).encode("utf-8")
