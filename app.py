@@ -4,42 +4,54 @@ import fitz
 import re
 import numpy as np
 
-from sklearn.feature_extraction.text import (
-    TfidfVectorizer
-)
-
-from sklearn.metrics.pairwise import (
-    cosine_similarity
-)
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # ---------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------
 st.set_page_config(
-    page_title="AI Question Paper Validator",
+    page_title="GenAI Question Paper Validator",
     page_icon="📘",
     layout="wide"
 )
 
 # ---------------------------------------------------
+# LOAD MODEL
+# ---------------------------------------------------
+@st.cache_resource
+def load_model():
+
+    model = SentenceTransformer(
+        "sentence-transformers/paraphrase-MiniLM-L3-v2",
+        device="cpu"
+    )
+
+    return model
+
+
+model = load_model()
+
+# ---------------------------------------------------
 # TITLE
 # ---------------------------------------------------
-st.title("📘 AI Question Paper Validator")
+st.title("📘 GenAI Question Paper Validator")
 
 st.markdown("""
 
 ### Features
 
-✅ Bloom Taxonomy Detection  
-✅ CO Alignment Validation  
-✅ Question Quality Analysis  
+✅ GenAI Semantic CO Alignment  
+✅ Bloom Taxonomy Validation  
 ✅ Bloom Coverage Analysis  
-✅ CSV Report Generation  
+✅ AI Similarity Scoring  
+✅ Question Quality Evaluation  
+✅ Lightweight CPU Model  
 
 """)
 
 # ---------------------------------------------------
-# BLOOM VERBS
+# BLOOM TAXONOMY
 # ---------------------------------------------------
 blooms_taxonomy = {
 
@@ -135,7 +147,7 @@ def extract_text_from_pdf(uploaded_file):
     except Exception as e:
 
         st.error(
-            f"PDF Error: {e}"
+            f"PDF Extraction Error: {e}"
         )
 
     return text
@@ -155,7 +167,9 @@ def extract_course_outcomes(text):
 
         if cleaned.startswith("CO"):
 
-            course_outcomes.append(cleaned)
+            course_outcomes.append(
+                cleaned
+            )
 
     return course_outcomes
 
@@ -191,24 +205,24 @@ def extract_questions(text):
     return questions
 
 # ---------------------------------------------------
-# CO ALIGNMENT
+# SEMANTIC CO ALIGNMENT
 # ---------------------------------------------------
 def validate_co_alignment(
     question,
     course_outcomes
 ):
 
-    documents = [question] + course_outcomes
+    question_embedding = model.encode(
+        [question]
+    )
 
-    vectorizer = TfidfVectorizer()
-
-    tfidf_matrix = vectorizer.fit_transform(
-        documents
+    co_embeddings = model.encode(
+        course_outcomes
     )
 
     similarities = cosine_similarity(
-        tfidf_matrix[0:1],
-        tfidf_matrix[1:]
+        question_embedding,
+        co_embeddings
     )[0]
 
     best_index = np.argmax(
@@ -240,19 +254,19 @@ def evaluate_quality(
 
     if bloom_level != "Unknown":
 
-        score += 50
+        score += 40
 
     if confidence >= 80:
 
-        score += 50
+        score += 60
 
     elif confidence >= 60:
 
-        score += 35
+        score += 45
 
     elif confidence >= 40:
 
-        score += 20
+        score += 30
 
     if score >= 90:
 
@@ -318,7 +332,7 @@ question_file = st.file_uploader(
 )
 
 # ---------------------------------------------------
-# VALIDATION BUTTON
+# VALIDATION
 # ---------------------------------------------------
 if st.button(
     "Validate Question Paper",
@@ -363,7 +377,7 @@ if st.button(
         if len(course_outcomes) == 0:
 
             st.error(
-                "No Course Outcomes found"
+                "No Course Outcomes Found"
             )
 
             st.stop()
@@ -371,7 +385,7 @@ if st.button(
         if len(questions) == 0:
 
             st.error(
-                "No Questions found"
+                "No Questions Found"
             )
 
             st.stop()
@@ -379,7 +393,7 @@ if st.button(
         results = []
 
         with st.spinner(
-            "Running Validation..."
+            "Running GenAI Validation..."
         ):
 
             for question in questions:
@@ -415,7 +429,7 @@ if st.button(
                     "Aligned CO":
                         best_co,
 
-                    "Similarity Score (%)":
+                    "Semantic Similarity (%)":
                         confidence,
 
                     "Quality":
@@ -435,9 +449,6 @@ if st.button(
             use_container_width=True
         )
 
-        # -------------------------------------------
-        # BLOOM COVERAGE
-        # -------------------------------------------
         coverage, missing = (
             bloom_coverage(
                 results
@@ -445,29 +456,20 @@ if st.button(
         )
 
         st.subheader(
-            "📊 Bloom Taxonomy Coverage"
+            "📊 Bloom Coverage Analysis"
         )
 
         st.metric(
-            "Coverage",
+            "Coverage Percentage",
             f"{coverage}%"
         )
 
         if len(missing) > 0:
 
             st.warning(
-                f"Missing Levels: {', '.join(missing)}"
+                f"Missing Bloom Levels: {', '.join(missing)}"
             )
 
-        else:
-
-            st.success(
-                "All Bloom Levels Covered"
-            )
-
-        # -------------------------------------------
-        # DOWNLOAD CSV
-        # -------------------------------------------
         csv = result_df.to_csv(
             index=False
         ).encode("utf-8")
