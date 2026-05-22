@@ -3,11 +3,7 @@ import pandas as pd
 import fitz
 import re
 
-from transformers import (
-    pipeline,
-    AutoTokenizer,
-    AutoModelForSequenceClassification
-)
+from transformers import pipeline
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -24,20 +20,9 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
 
-    model_name = "facebook/bart-large-mnli"
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name
-    )
-
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_name
-    )
-
     classifier = pipeline(
-        task="zero-shot-classification",
-        model=model,
-        tokenizer=tokenizer,
+        "zero-shot-classification",
+        model="typeform/distilbert-base-uncased-mnli",
         device=-1
     )
 
@@ -47,7 +32,7 @@ def load_model():
 classifier = load_model()
 
 # ---------------------------------------------------
-# BLOOM TAXONOMY KEYWORDS
+# BLOOM TAXONOMY
 # ---------------------------------------------------
 blooms_keywords = {
 
@@ -116,7 +101,7 @@ def detect_blooms_level(question):
     return "Unknown"
 
 # ---------------------------------------------------
-# PDF TEXT EXTRACTION
+# PDF EXTRACTION
 # ---------------------------------------------------
 def extract_text_from_pdf(uploaded_file):
 
@@ -131,22 +116,18 @@ def extract_text_from_pdf(uploaded_file):
 
         for page in pdf_document:
 
-            page_text = page.get_text()
-
-            if page_text:
-
-                text += page_text + "\n"
+            text += page.get_text() + "\n"
 
     except Exception as e:
 
         st.error(
-            f"PDF Extraction Error: {e}"
+            f"PDF Error: {e}"
         )
 
     return text
 
 # ---------------------------------------------------
-# VALIDATE CO ALIGNMENT
+# VALIDATE CO
 # ---------------------------------------------------
 def validate_co_alignment(
     question,
@@ -156,9 +137,8 @@ def validate_co_alignment(
     try:
 
         result = classifier(
-            sequences=question,
-            candidate_labels=course_outcomes,
-            multi_label=False
+            question,
+            candidate_labels=course_outcomes
         )
 
         best_co = result["labels"][0]
@@ -173,7 +153,7 @@ def validate_co_alignment(
     except Exception as e:
 
         return (
-            f"Model Error: {e}",
+            f"Error: {e}",
             0
         )
 
@@ -186,17 +166,19 @@ st.title(
 
 st.markdown("""
 
-### Features
+Upload:
+- Course Outcomes PDF
+- Question Bank PDF
 
-- Bloom's Taxonomy Detection
-- Course Outcome Alignment
-- AI-based Validation
-- CSV Report Generation
+The AI system will:
+- Detect Bloom's Taxonomy level
+- Validate CO alignment
+- Generate report
 
 """)
 
 # ---------------------------------------------------
-# FILE UPLOADS
+# FILES
 # ---------------------------------------------------
 co_file = st.file_uploader(
     "Upload Course Outcomes PDF",
@@ -209,7 +191,7 @@ question_file = st.file_uploader(
 )
 
 # ---------------------------------------------------
-# VALIDATE
+# BUTTON
 # ---------------------------------------------------
 if st.button(
     "Validate Question Paper"
@@ -226,11 +208,8 @@ if st.button(
 
     else:
 
-        # -------------------------------------------
-        # EXTRACT TEXT
-        # -------------------------------------------
         with st.spinner(
-            "Extracting PDF content..."
+            "Extracting PDFs..."
         ):
 
             co_text = extract_text_from_pdf(
@@ -272,9 +251,6 @@ if st.button(
             )
         ]
 
-        # -------------------------------------------
-        # CHECKS
-        # -------------------------------------------
         if len(
             course_outcomes
         ) == 0:
@@ -295,9 +271,6 @@ if st.button(
 
             st.stop()
 
-        # -------------------------------------------
-        # PROCESS
-        # -------------------------------------------
         results = []
 
         with st.spinner(
@@ -345,15 +318,12 @@ if st.button(
                         quality
                 })
 
-        # -------------------------------------------
-        # DATAFRAME
-        # -------------------------------------------
         result_df = pd.DataFrame(
             results
         )
 
         st.success(
-            "Validation Completed Successfully"
+            "Validation Completed"
         )
 
         st.dataframe(
@@ -361,9 +331,6 @@ if st.button(
             use_container_width=True
         )
 
-        # -------------------------------------------
-        # DOWNLOAD CSV
-        # -------------------------------------------
         csv = result_df.to_csv(
             index=False
         ).encode("utf-8")
