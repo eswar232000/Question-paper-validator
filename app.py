@@ -26,7 +26,9 @@ def load_model():
 
     model_name = "typeform/distilbert-base-uncased-mnli"
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name
+    )
 
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name
@@ -45,9 +47,10 @@ def load_model():
 classifier = load_model()
 
 # ---------------------------------------------------
-# BLOOM TAXONOMY
+# BLOOM TAXONOMY VERBS
 # ---------------------------------------------------
 blooms_keywords = {
+
     "Remember": [
         "define",
         "list",
@@ -103,7 +106,11 @@ def detect_blooms_level(question):
 
         for verb in verbs:
 
-            if re.search(rf"\b{verb}\b", q):
+            if re.search(
+                rf"\b{verb}\b",
+                q
+            ):
+
                 return level
 
     return "Unknown"
@@ -127,18 +134,24 @@ def extract_text_from_pdf(uploaded_file):
             page_text = page.get_text()
 
             if page_text:
+
                 text += page_text + "\n"
 
     except Exception as e:
 
-        st.error(f"PDF Extraction Error: {e}")
+        st.error(
+            f"PDF Extraction Error: {e}"
+        )
 
     return text
 
 # ---------------------------------------------------
 # VALIDATE CO ALIGNMENT
 # ---------------------------------------------------
-def validate_co_alignment(question, course_outcomes):
+def validate_co_alignment(
+    question,
+    course_outcomes
+):
 
     try:
 
@@ -159,19 +172,27 @@ def validate_co_alignment(question, course_outcomes):
 
     except Exception as e:
 
-        return f"Model Error: {e}", 0
+        return (
+            f"Model Error: {e}",
+            0
+        )
 
 # ---------------------------------------------------
 # UI
 # ---------------------------------------------------
-st.title("📘 Question Paper Quality Validator")
+st.title(
+    "📘 Question Paper Quality Validator"
+)
 
 st.markdown("""
+
 ### Features
+
 - Bloom's Taxonomy Detection
-- CO Alignment Validation
-- AI-based Quality Analysis
+- Course Outcome Alignment
+- AI-based Validation
 - CSV Report Generation
+
 """)
 
 # ---------------------------------------------------
@@ -188,11 +209,16 @@ question_file = st.file_uploader(
 )
 
 # ---------------------------------------------------
-# VALIDATION BUTTON
+# VALIDATION
 # ---------------------------------------------------
-if st.button("Validate Question Paper"):
+if st.button(
+    "Validate Question Paper"
+):
 
-    if co_file is None or question_file is None:
+    if (
+        co_file is None
+        or question_file is None
+    ):
 
         st.warning(
             "Please upload both PDF files"
@@ -200,6 +226,9 @@ if st.button("Validate Question Paper"):
 
     else:
 
+        # -------------------------------------------
+        # EXTRACT PDF TEXT
+        # -------------------------------------------
         with st.spinner(
             "Extracting PDF content..."
         ):
@@ -221,7 +250,9 @@ if st.button("Validate Question Paper"):
 
             for line in co_text.split("\n")
 
-            if len(line.strip()) > 5
+            if len(
+                line.strip()
+            ) > 5
         ]
 
         # -------------------------------------------
@@ -235,14 +266,18 @@ if st.button("Validate Question Paper"):
 
             if (
                 "?" in line
-                or len(line.strip()) > 20
+                or len(
+                    line.strip()
+                ) > 20
             )
         ]
 
         # -------------------------------------------
-        # VALIDATIONS
+        # VALIDATION CHECKS
         # -------------------------------------------
-        if len(course_outcomes) == 0:
+        if len(
+            course_outcomes
+        ) == 0:
 
             st.error(
                 "No Course Outcomes detected"
@@ -250,7 +285,9 @@ if st.button("Validate Question Paper"):
 
             st.stop()
 
-        if len(questions) == 0:
+        if len(
+            questions
+        ) == 0:
 
             st.error(
                 "No Questions detected"
@@ -258,6 +295,9 @@ if st.button("Validate Question Paper"):
 
             st.stop()
 
+        # -------------------------------------------
+        # RESULTS
+        # -------------------------------------------
         results = []
 
         # -------------------------------------------
@@ -269,8 +309,10 @@ if st.button("Validate Question Paper"):
 
             for question in questions:
 
-                blooms_level = detect_blooms_level(
-                    question
+                blooms_level = (
+                    detect_blooms_level(
+                        question
+                    )
                 )
 
                 best_co, confidence = (
@@ -290,7 +332,8 @@ if st.button("Validate Question Paper"):
 
                 results.append({
 
-                    "Question": question,
+                    "Question":
+                        question,
 
                     "Bloom Level":
                         blooms_level,
@@ -306,9 +349,11 @@ if st.button("Validate Question Paper"):
                 })
 
         # -------------------------------------------
-        # RESULTS TABLE
+        # DATAFRAME
         # -------------------------------------------
-        result_df = pd.DataFrame(results)
+        result_df = pd.DataFrame(
+            results
+        )
 
         st.success(
             "Validation Completed Successfully"
