@@ -4,8 +4,13 @@ import fitz
 import re
 import numpy as np
 
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import (
+    TfidfVectorizer
+)
+
+from sklearn.metrics.pairwise import (
+    cosine_similarity
+)
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -17,21 +22,6 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# LOAD AI MODEL
-# ---------------------------------------------------
-@st.cache_resource
-def load_model():
-
-    model = SentenceTransformer(
-        "sentence-transformers/all-MiniLM-L6-v2"
-    )
-
-    return model
-
-
-model = load_model()
-
-# ---------------------------------------------------
 # TITLE
 # ---------------------------------------------------
 st.title("📘 AI Question Paper Validator")
@@ -40,17 +30,16 @@ st.markdown("""
 
 ### Features
 
-✅ Bloom's Taxonomy Detection  
-✅ Semantic CO Alignment  
+✅ Bloom Taxonomy Detection  
+✅ CO Alignment Validation  
+✅ Question Quality Analysis  
 ✅ Bloom Coverage Analysis  
-✅ AI-Based Similarity Validation  
-✅ Question Quality Evaluation  
 ✅ CSV Report Generation  
 
 """)
 
 # ---------------------------------------------------
-# BLOOM TAXONOMY VERBS
+# BLOOM VERBS
 # ---------------------------------------------------
 blooms_taxonomy = {
 
@@ -112,8 +101,6 @@ def detect_bloom_level(question):
 
     q = question.lower()
 
-    detected_levels = []
-
     for level, verbs in blooms_taxonomy.items():
 
         for verb in verbs:
@@ -123,11 +110,7 @@ def detect_bloom_level(question):
                 q
             ):
 
-                detected_levels.append(level)
-
-    if len(detected_levels) > 0:
-
-        return detected_levels[0]
+                return level
 
     return "Unknown"
 
@@ -152,7 +135,7 @@ def extract_text_from_pdf(uploaded_file):
     except Exception as e:
 
         st.error(
-            f"PDF Extraction Error: {e}"
+            f"PDF Error: {e}"
         )
 
     return text
@@ -194,17 +177,11 @@ def extract_questions(text):
             and (
                 "?" in cleaned
                 or any(
-                    word in cleaned.lower()
-                    for word in [
-                        "define",
-                        "explain",
-                        "analyze",
-                        "apply",
-                        "design",
-                        "evaluate",
-                        "describe",
-                        "show"
-                    ]
+                    verb in cleaned.lower()
+
+                    for verbs in blooms_taxonomy.values()
+
+                    for verb in verbs
                 )
             )
         ):
@@ -214,24 +191,24 @@ def extract_questions(text):
     return questions
 
 # ---------------------------------------------------
-# SEMANTIC CO ALIGNMENT
+# CO ALIGNMENT
 # ---------------------------------------------------
 def validate_co_alignment(
     question,
     course_outcomes
 ):
 
-    question_embedding = model.encode(
-        [question]
-    )
+    documents = [question] + course_outcomes
 
-    co_embeddings = model.encode(
-        course_outcomes
+    vectorizer = TfidfVectorizer()
+
+    tfidf_matrix = vectorizer.fit_transform(
+        documents
     )
 
     similarities = cosine_similarity(
-        question_embedding,
-        co_embeddings
+        tfidf_matrix[0:1],
+        tfidf_matrix[1:]
     )[0]
 
     best_index = np.argmax(
@@ -252,9 +229,9 @@ def validate_co_alignment(
     return best_co, confidence
 
 # ---------------------------------------------------
-# QUESTION QUALITY
+# QUALITY ANALYSIS
 # ---------------------------------------------------
-def evaluate_question_quality(
+def evaluate_quality(
     bloom_level,
     confidence
 ):
@@ -277,7 +254,7 @@ def evaluate_question_quality(
 
         score += 20
 
-    if score >= 85:
+    if score >= 90:
 
         return "Excellent"
 
@@ -294,13 +271,13 @@ def evaluate_question_quality(
 # ---------------------------------------------------
 # BLOOM COVERAGE
 # ---------------------------------------------------
-def bloom_coverage_analysis(results):
+def bloom_coverage(results):
 
-    levels_present = set()
+    present = set()
 
     for row in results:
 
-        levels_present.add(
+        present.add(
             row["Bloom Level"]
         )
 
@@ -308,7 +285,7 @@ def bloom_coverage_analysis(results):
 
     coverage = round(
         (
-            len(levels_present)
+            len(present)
             / total_levels
         ) * 100,
         2
@@ -320,7 +297,7 @@ def bloom_coverage_analysis(results):
 
         for level in blooms_taxonomy.keys()
 
-        if level not in levels_present
+        if level not in present
     ]
 
     return coverage, missing
@@ -359,9 +336,6 @@ if st.button(
 
     else:
 
-        # -------------------------------------------
-        # EXTRACT TEXT
-        # -------------------------------------------
         with st.spinner(
             "Reading PDFs..."
         ):
@@ -374,9 +348,6 @@ if st.button(
                 question_file
             )
 
-        # -------------------------------------------
-        # EXTRACT COs & QUESTIONS
-        # -------------------------------------------
         course_outcomes = (
             extract_course_outcomes(
                 co_text
@@ -389,9 +360,6 @@ if st.button(
             )
         )
 
-        # -------------------------------------------
-        # VALIDATION
-        # -------------------------------------------
         if len(course_outcomes) == 0:
 
             st.error(
@@ -410,11 +378,8 @@ if st.button(
 
         results = []
 
-        # -------------------------------------------
-        # AI VALIDATION
-        # -------------------------------------------
         with st.spinner(
-            "Running AI Validation..."
+            "Running Validation..."
         ):
 
             for question in questions:
@@ -433,7 +398,7 @@ if st.button(
                 )
 
                 quality = (
-                    evaluate_question_quality(
+                    evaluate_quality(
                         bloom_level,
                         confidence
                     )
@@ -450,16 +415,13 @@ if st.button(
                     "Aligned CO":
                         best_co,
 
-                    "Semantic Similarity (%)":
+                    "Similarity Score (%)":
                         confidence,
 
                     "Quality":
                         quality
                 })
 
-        # -------------------------------------------
-        # DATAFRAME
-        # -------------------------------------------
         result_df = pd.DataFrame(
             results
         )
@@ -477,7 +439,7 @@ if st.button(
         # BLOOM COVERAGE
         # -------------------------------------------
         coverage, missing = (
-            bloom_coverage_analysis(
+            bloom_coverage(
                 results
             )
         )
@@ -487,14 +449,14 @@ if st.button(
         )
 
         st.metric(
-            "Coverage Percentage",
+            "Coverage",
             f"{coverage}%"
         )
 
         if len(missing) > 0:
 
             st.warning(
-                f"Missing Bloom Levels: {', '.join(missing)}"
+                f"Missing Levels: {', '.join(missing)}"
             )
 
         else:
@@ -504,7 +466,7 @@ if st.button(
             )
 
         # -------------------------------------------
-        # DOWNLOAD REPORT
+        # DOWNLOAD CSV
         # -------------------------------------------
         csv = result_df.to_csv(
             index=False
@@ -515,5 +477,5 @@ if st.button(
             data=csv,
             file_name="validation_report.csv",
             mime="text/csv",
-            key="download_button"
+            key="download_csv"
         )
