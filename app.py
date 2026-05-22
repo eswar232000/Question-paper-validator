@@ -3,7 +3,8 @@ import pandas as pd
 import fitz
 import re
 
-from transformers import pipeline
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -20,16 +21,14 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
 
-    classifier = pipeline(
-        "zero-shot-classification",
-        model="typeform/distilbert-base-uncased-mnli",
-        device=-1
+    model = SentenceTransformer(
+        "all-MiniLM-L6-v2"
     )
 
-    return classifier
+    return model
 
 
-classifier = load_model()
+model = load_model()
 
 # ---------------------------------------------------
 # BLOOM TAXONOMY
@@ -107,55 +106,50 @@ def extract_text_from_pdf(uploaded_file):
 
     text = ""
 
-    try:
+    pdf_document = fitz.open(
+        stream=uploaded_file.read(),
+        filetype="pdf"
+    )
 
-        pdf_document = fitz.open(
-            stream=uploaded_file.read(),
-            filetype="pdf"
-        )
+    for page in pdf_document:
 
-        for page in pdf_document:
-
-            text += page.get_text() + "\n"
-
-    except Exception as e:
-
-        st.error(
-            f"PDF Error: {e}"
-        )
+        text += page.get_text() + "\n"
 
     return text
 
 # ---------------------------------------------------
-# VALIDATE CO
+# CO ALIGNMENT
 # ---------------------------------------------------
 def validate_co_alignment(
     question,
     course_outcomes
 ):
 
-    try:
+    question_embedding = model.encode(
+        [question]
+    )
 
-        result = classifier(
-            question,
-            candidate_labels=course_outcomes
-        )
+    co_embeddings = model.encode(
+        course_outcomes
+    )
 
-        best_co = result["labels"][0]
+    similarities = cosine_similarity(
+        question_embedding,
+        co_embeddings
+    )[0]
 
-        confidence = round(
-            result["scores"][0] * 100,
-            2
-        )
+    best_index = similarities.argmax()
 
-        return best_co, confidence
+    best_co = course_outcomes[
+        best_index
+    ]
 
-    except Exception as e:
+    confidence = round(
+        similarities[best_index] * 100,
+        2
+    )
 
-        return (
-            f"Error: {e}",
-            0
-        )
+    return best_co, confidence
 
 # ---------------------------------------------------
 # UI
@@ -164,22 +158,6 @@ st.title(
     "📘 Question Paper Quality Validator"
 )
 
-st.markdown("""
-
-Upload:
-- Course Outcomes PDF
-- Question Bank PDF
-
-The AI system will:
-- Detect Bloom's Taxonomy level
-- Validate CO alignment
-- Generate report
-
-""")
-
-# ---------------------------------------------------
-# FILES
-# ---------------------------------------------------
 co_file = st.file_uploader(
     "Upload Course Outcomes PDF",
     type=["pdf"]
@@ -190,9 +168,6 @@ question_file = st.file_uploader(
     type=["pdf"]
 )
 
-# ---------------------------------------------------
-# BUTTON
-# ---------------------------------------------------
 if st.button(
     "Validate Question Paper"
 ):
@@ -208,21 +183,14 @@ if st.button(
 
     else:
 
-        with st.spinner(
-            "Extracting PDFs..."
-        ):
+        co_text = extract_text_from_pdf(
+            co_file
+        )
 
-            co_text = extract_text_from_pdf(
-                co_file
-            )
+        q_text = extract_text_from_pdf(
+            question_file
+        )
 
-            q_text = extract_text_from_pdf(
-                question_file
-            )
-
-        # -------------------------------------------
-        # COURSE OUTCOMES
-        # -------------------------------------------
         course_outcomes = [
 
             line.strip()
@@ -234,9 +202,6 @@ if st.button(
             ) > 5
         ]
 
-        # -------------------------------------------
-        # QUESTIONS
-        # -------------------------------------------
         questions = [
 
             line.strip()
@@ -251,95 +216,54 @@ if st.button(
             )
         ]
 
-        if len(
-            course_outcomes
-        ) == 0:
-
-            st.error(
-                "No Course Outcomes detected"
-            )
-
-            st.stop()
-
-        if len(
-            questions
-        ) == 0:
-
-            st.error(
-                "No Questions detected"
-            )
-
-            st.stop()
-
         results = []
 
-        with st.spinner(
-            "Running AI Validation..."
-        ):
+        for question in questions:
 
-            for question in questions:
+            blooms_level = (
+                detect_blooms_level(
+                    question
+                )
+            )
 
-                blooms_level = (
-                    detect_blooms_level(
-                        question
-                    )
+            best_co, confidence = (
+                validate_co_alignment(
+                    question,
+                    course_outcomes
+                )
+            )
+
+            quality = "Good"
+
+            if confidence < 50:
+
+                quality = (
+                    "Needs Improvement"
                 )
 
-                best_co, confidence = (
-                    validate_co_alignment(
-                        question,
-                        course_outcomes
-                    )
-                )
+            results.append({
 
-                quality = "Good"
+                "Question":
+                    question,
 
-                if confidence < 50:
+                "Bloom Level":
+                    blooms_level,
 
-                    quality = (
-                        "Needs Improvement"
-                    )
+                "Aligned CO":
+                    best_co,
 
-                results.append({
+                "Confidence (%)":
+                    confidence,
 
-                    "Question":
-                        question,
-
-                    "Bloom Level":
-                        blooms_level,
-
-                    "Aligned CO":
-                        best_co,
-
-                    "Confidence (%)":
-                        confidence,
-
-                    "Quality":
-                        quality
-                })
+                "Quality":
+                    quality
+            })
 
         result_df = pd.DataFrame(
             results
         )
 
-        st.success(
-            "Validation Completed"
-        )
-
         st.dataframe(
             result_df,
             use_container_width=True
-        )
-
-        csv = result_df.to_csv(
-            index=False
-        ).encode("utf-8")
-
-        st.download_button(
-            label="Download Report",
-            data=csv,
-            file_name=(
-                "validation_report.csv"
-            ),
-            mime="text/csv"
         )
